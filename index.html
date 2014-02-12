@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>YouTube API</title>
+	<style>
+		#search-box{
+			width: 50%;
+			float: left;
+			padding: 20px;
+			box-sizing: border-box;
+		}
+		#search-box input{
+			width: 300px;
+		}
+		#favorits{
+			width: 50%;
+			float: right;
+			padding: 20px;
+			box-sizing: border-box;
+		}
+	</style>
+	<script src="js/vendor/jquery-2.0.3.js"></script>
+	<script src="js/vendor/underscore.js"></script>
+	<script src="js/vendor/backbone.js"></script>
+	<script>
+	window.SearchView = Backbone.View.extend({
+		events : {
+			"click button" : "search",
+			"keypress input" : "keyHandler"
+		},
+		initialize: function(config){
+			this.$el = config.$el; //Es el elemento en DOM de la vista
+			this.collection = config.collection;//Esta es la coleccion que tiene asociada mi vista
+
+			var self = this;
+
+			this.collection.on('add',function(model){
+				var videoView = new window.VideoView(model);
+
+				videoView.render();
+
+				self.$el.find('#videos').append(videoView.$el);
+			});
+		},
+		keyHandler : function(event){
+			if(event.which == 13){
+				this.search();
+			}
+		},
+		search : function(event){
+			var value = this.$el.find('input').val(),
+				self = this;
+
+			this.$el.find('input').val('');
+
+			//capaDeDatos.buscar(value);
+			this.collection.search(value);
+
+
+			console.log('el valor a buscar es',value);
+		},
+		render : function(){}
+	});
+
+	window.VideoView = Backbone.View.extend({
+		initialize : function(model){
+			var self = this;
+
+			this.model = model;
+
+			this.model.on('change',function(){
+				self.render();
+			})
+
+			this.model.on('destroy',function(){
+				self.remove();
+			});
+		},
+		render : function(){
+			var videoHTML = window.templates.videoTemplate(  this.model.toJSON() );
+			this.$el.html(videoHTML);
+		}
+	});
+
+	window.SearchCollection = Backbone.Collection.extend({
+		empty: function(){
+			for (var i = this.models.length - 1; i >= 0; i--) {
+				this.models[i].destroy();
+			};
+		},
+		search : function(value){
+			console.log(value);
+
+			var self = this;
+
+			self.empty();
+
+			var youtube = $.getJSON("http://gdata.youtube.com/feeds/api/videos?vq="+value+"&max-results=10&alt=json-in-script&callback=?");
+
+			youtube.done(function(data){
+				var videos = data.feed.entry.map(function(entry){
+					return {
+						title : entry.title.$t,
+						thumb : entry.media$group.media$thumbnail[0].url
+					}
+				});
+
+				videos.forEach(function(videoData){
+					self.add(videoData);
+				});
+			});
+		}
+	});
+
+	$(document).ready(function(){
+		window.searchCollection = new window.SearchCollection();
+		window.searchBox = new window.SearchView({
+			$el : $('#searchBox'),
+			collection : searchCollection
+		});
+
+		window.templates = {};
+		templates.videoTemplate = _.template( $('#videoTemplate').html() );
+	});
+	</script>
+</head>
+<body>
+	<div id="searchBox">
+		<p>Buscar: 
+			<input type="text" />
+			<button>Buscar</button>
+		</p>
+		<div id="videos"></div>
+	</div>
+	<div id="favorits"></div>
+	<script id="videoTemplate" type="text/template">
+		<div>
+			<h4><%= title %></h4>
+			<img src="<%= thumb %>" alt="<%= thumb %>">
+			<span class="favorite">Favorito</span>
+		</div>
+	</script>
+</body>
+</html>
